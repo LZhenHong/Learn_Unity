@@ -332,3 +332,58 @@ UnityWebRequest 有一个特定的句柄来处理 AssetBundle：`DownloadHandler
 
 - 在场景和代码中消除对不需要的对象的所有引用。完成此操作后，调用 [Resources.UnloadUnusedAssets](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.UnloadUnusedAssets.html)。
 - 以非附加方式加载场景。这样会销毁当前场景中的所有对象并自动调用 [Resources.UnloadUnusedAssets](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.UnloadUnusedAssets.html)。
+
+## AssetBundle 压缩
+
+### AssetBundle 压缩格式
+
+默认情况下，Unity 通过 LZMA 压缩来创建 AssetBundle，然后通过 LZ4 压缩将其缓存。本部分描述以上的两种压缩格式。
+
+Unity 的 [AssetBundle 构建管线](https://docs.unity.cn/cn/2019.4/Manual/AssetBundles-Building.html)通过 LZMA 压缩来创建 AssetBundle。此压缩格式是表示整个 AssetBundle 的数据流，这意味着如果您需要从这些存档中读取某个资源，就必须将整个流解压缩。这是从内容分发网络 (CDN) 下载的 AssetBundle 的首选格式，因为文件大小小于使用 LZ4 压缩的文件。
+
+另一方面，LZ4 压缩是一种基于块的压缩算法。如果 Unity 需要从 LZ4 存档中访问资源，只需解压缩并读取包含所请求资源的字节的块。这是 Unity 在其两种 AssetBundle 缓存中使用的压缩方法。在构建 AssetBundle 以强制进行 LZ4(HC) 压缩时，应使用 [BuildAssetBundleOptions.ChunkBasedCompression](https://docs.unity.cn/ScriptReference/BuildAssetBundleOptions.ChunkBasedCompression.html) 值。
+
+使用 [BuildAssetBundleOptions.UncompressedAssetBundle](https://docs.unity.cn/ScriptReference/BuildAssetBundleOptions.UncompressedAssetBundle.html) 时由 Unity 构建的未压缩 AssetBundle 无需解压缩，但是会占用更多磁盘空间。
+
+### AssetBundle 缓存
+
+为了使用 WWW 或 [UnityWebRequest](https://docs.unity.cn/ScriptReference/Networking.UnityWebRequest.html) (UWR) 来优化 LZMA AssetBundle 的提取、再压缩和版本控制，Unity 有两种缓存：
+
+- **内存缓存**以 [UncompressedRuntime](https://docs.unity.cn/ScriptReference/BuildCompression.UncompressedRuntime.html) 格式将 AssetBundle 存储在 RAM 中。
+- **磁盘缓存**将提取的 AssetBundle 以下文描述的压缩格式存储在可写介质中。
+
+将 AssetBundle 加载到内存缓存中会耗用大量的内存。除非您特别希望频繁且快速地访问 AssetBundle 的内容，否则内存缓存的性价比可能不高。因此，应改用磁盘缓存。
+
+如果向 UWR API 提供版本参数，Unity 会将 AssetBundle 数据存储在磁盘缓存中。如果没有提供版本参数，Unity 将使用内存缓存。版本参数可以是版本号或哈希。如果 [Caching.compressionEnabled](https://docs.unity.cn/ScriptReference/Caching-compressionEnabled.html) 设置为 true，则对于所有后续下载，Unity 会在将 AssetBundle 写入磁盘时应用 LZ4 压缩。它不会压缩缓存中的现有未压缩数据。如果 [Caching.compressionEnabled](https://docs.unity.cn/ScriptReference/Caching-compressionEnabled.html) 设置为 false，Unity 在将 AssetBundle 写入磁盘时不会应用压缩。
+
+最初加载缓存的 LZMA AssetBundle 所花费的时间更长，因为 Unity 必须将存档重新压缩为目标格式。随后的加载将使用缓存版本。
+
+[AssetBundle.LoadFromFile](https://docs.unity.cn/ScriptReference/AssetBundle.LoadFromFile.html) 或 [AssetBundle.LoadFromFileAsync](https://docs.unity.cn/ScriptReference/AssetBundle.LoadFromFileAsync.html) 始终对 LZMA AssetBundle 使用内存缓存，因此您应该使用 UWR API。如果无法使用 UWR API，您可以使用 [AssetBundle.RecompressAssetBundleAsync](https://docs.unity.cn/ScriptReference/AssetBundle.RecompressAssetBundleAsync.html) 将 LZMA AssetBundle 重写到磁盘中。
+
+内部测试表明，使用磁盘缓存而不是内存缓存在 RAM 使用率方面至少存在一个数量级的差异。因此，必须在内存影响、增加的磁盘空间要求以及应用程序的资源实例化时间之间进行权衡。
+
+## 资源重复
+
+当对象构建到 AssetBundle 中时，Unity 5 的 AssetBundle 系统会查找对象的所有依赖项。这是使用资源数据库完成的。此依赖关系信息用于确定包含在 AssetBundle 中的对象集。
+
+显式分配给 AssetBundle 的对象将仅构建到该 AssetBundle 中。当对象的 AssetImporter 将其 assetBundleName 属性设置为非空字符串时，表示“显式指定”该对象。
+
+未显式分配到 AssetBundle 中的任何对象将包含在所有 AssetBundle 中，这些 AssetBundle 会包含一个或多个引用该未标记对象的对象。
+
+如果将两个不同的对象分配给两个不同的 AssetBundle，但两者都引用了一个共同的依赖项对象，那么该依赖项对象将被复制到两个 AssetBundle 中。复制的依赖项也将被实例化，这意味着依赖项对象的两个副本将被视为具有不同标识符的不同对象。这将增加应用程序的 AssetBundle 的总大小。如果应用程序加载对象的两个父项，则还会导致将两个不同的对象副本加载到内存中。
+
+通过组合 AssetDatabase 和 AssetImporter API，可以编写一个 Editor 脚本，确保将所有 AssetBundle 的直接或间接依赖项都分配给 AssetBundle，或者不会有两个 AssetBundle 共享尚未分配给 AssetBundle 的依赖项。由于复制资源的内存成本，建议所有项目都采用这样的脚本。
+
+### 精灵图集重复
+
+以下部分将介绍 Unity 5 的资源依赖性计算代码在与自动生成的精灵图集结合使用时出现的奇怪行为。
+
+任何自动生成的精灵图集都将与生成精灵图集的精灵对象一起分配到同一个 AssetBundle。如果精灵对象被分配给多个 AssetBundle，则精灵图集将不会被分配给 AssetBundle 并且将被复制。如果精灵对象未分配给 AssetBundle，则精灵图集也不会分配给 AssetBundle。
+
+为了确保精灵图集不重复，请确保标记到相同精灵图集的所有精灵都被分配到同一个 AssetBundle。
+
+### Android 纹理
+
+由于 Android 生态系统中存在严重的设备碎片，因此通常需要将纹理压缩为多种不同的格式。虽然所有 Android 设备都支持 ETC1，但 ETC1 不支持具有 Alpha 通道的纹理。如果应用程序不需要 OpenGL ES 2 支持，解决该问题的最简单方法是使用所有 Android OpenGL ES 3 设备都支持的 ETC2。
+
+在运行时，可以使用 [SystemInfo.SupportsTextureFormat](http://docs.unity.cn/ScriptReference/SystemInfo.SupportsTextureFormat.html?_ga=1.141687282.1751468213.1479139860) API 检测对不同纹理压缩格式的支持情况。应使用此信息来选择和加载含有以受支持格式压缩的纹理的 AssetBundle 变体。
