@@ -387,3 +387,48 @@ Unity 的 [AssetBundle 构建管线](https://docs.unity.cn/cn/2019.4/Manual/Asse
 由于 Android 生态系统中存在严重的设备碎片，因此通常需要将纹理压缩为多种不同的格式。虽然所有 Android 设备都支持 ETC1，但 ETC1 不支持具有 Alpha 通道的纹理。如果应用程序不需要 OpenGL ES 2 支持，解决该问题的最简单方法是使用所有 Android OpenGL ES 3 设备都支持的 ETC2。
 
 在运行时，可以使用 [SystemInfo.SupportsTextureFormat](http://docs.unity.cn/ScriptReference/SystemInfo.SupportsTextureFormat.html?_ga=1.141687282.1751468213.1479139860) API 检测对不同纹理压缩格式的支持情况。应使用此信息来选择和加载含有以受支持格式压缩的纹理的 AssetBundle 变体。
+
+## 在运行时加载资源
+
+Unity 支持项目中的__资源文件夹__，允许在主游戏文件中提供内容，但在请求之前不加载这些内容。也可以创建__资源包__。这些文件完全独立于主游戏文件，其中包含游戏按需从文件或 URL 访问的资源。
+
+### 资源包 (Asset Bundle)
+
+资源包是外部资源集合。您可以拥有许多资源包，因此可以拥有许多不同的外部资源集合。这些文件存在于构建的 Unity 播放器之外，通常位于 Web 服务器上，供最终用户动态访问。
+
+要构建资源包，可在 Editor 脚本中调用 [BuildPipeline.BuildAssetBundles()](https://docs.unity.cn/cn/2019.4/ScriptReference/BuildPipeline.BuildAssetBundles.html)。在参数中，指定要包含在构建文件中的__对象__数组以及其他一些选项。这将构建一个文件，稍后即可使用 [AssetBundle.LoadAsset()](https://docs.unity.cn/cn/2019.4/ScriptReference/AssetBundle.LoadAsset.html) 在运行时动态加载该文件。
+
+### 资源文件夹 (Resources)
+
+资源文件夹是包含在构建的 Unity 播放器中但不一定链接到 Inspector 中任何游戏对象的资源集合。
+
+要将任何内容放入资源文件夹，只需在 __Project 视图__中创建一个新文件夹，并将该文件夹命名为“Resources”。可在项目中以不同方式组织多个资源文件夹。每当想从其中一个文件夹加载资源时，请调用 [Resources.Load()](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.Load.html)。
+
+#### 注意：
+
+在 Resources 文件夹中找到的所有资源及其依赖项都存储在名为 *resources.assets* 的文件中。如果一个资源已被另一个关卡使用，则该资源会存储在该关卡的 *.sharedAssets* 文件中。 **Edit > PlayerSettings** **First Streamed Level** 设置决定了在哪个关卡收集 *resources.assets* 并将其包含在构建中。
+
+通过 [Resources.Load()](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.Load.html) 只能访问 _Resources 文件夹_中的资源。然而，更多资源可能最终出现在“resources.assets”文件中，因为它们是依赖项。（例如，Resources 文件夹中的材质可能引用 Resources 文件夹之外的纹理）
+
+### 资源卸载
+
+可通过调用 [AssetBundle.Unload()](https://docs.unity.cn/cn/2019.4/ScriptReference/AssetBundle.Unload.html) 来卸载 AssetBundle 的资源。如果为 **unloadAllLoadedObjects** 参数传递 __true__，则 AssetBundle 内部保存的对象和使用 [AssetBundle.LoadAsset()](https://docs.unity.cn/cn/2019.4/ScriptReference/AssetBundle.LoadAsset.html) 从 AssetBundle 加载的对象都将被销毁并且捆绑包使用的内存将被释放。
+
+有时可能更希望加载 AssetBundle，实例化所需的对象，并释放捆绑包使用的内存，同时保留对象。好处是可以释放内存来用于其他任务，例如加载另一个 AssetBundle。在这种情况下，可传递 **false** 作为参数。销毁资源包后，无法再加载其中的对象。
+
+如果要在加载另一个关卡之前销毁使用 [Resources.Load()](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.Load.html) 加载的场景对象，请对这些对象调用 [Object.Destroy()](https://docs.unity.cn/cn/2019.4/ScriptReference/Object.Destroy.html)。要释放资源，请使用 [Resources.UnloadUnusedAssets()](https://docs.unity.cn/cn/2019.4/ScriptReference/Resources.UnloadUnusedAssets.html)。
+
+## 流媒体资源 (Streaming Assets)
+
+Unity 会将放置在 Unity 项目中名为 **StreamingAssets**（区分大小写）的文件夹中的所有文件逐字复制到目标计算机上的特定文件夹。要获取此文件夹，请使用 [Application.streamingAssetsPath](https://docs.unity.cn/cn/2019.4/ScriptReference/Application-streamingAssetsPath.html) 属性。在任何情况下，最好使用 `Application.streamingAssetsPath` 来获取 **StreamingAssets** 文件夹的位置，因为它总是指向运行应用程序的平台上的正确位置。
+
+`Application.streamingAssetsPath` 返回的位置因平台而异：
+
+- 大多数平台（Unity Editor、Windows、Linux 播放器、PS4、Xbox One、Switch）使用 `Application.dataPath + "/StreamingAssets"`。
+- macOS 播放器使用 `Application.dataPath + "/Resources/Data/StreamingAssets"`。
+- iOS 使用 `Application.dataPath + "/Raw"`。
+- Android 使用经过压缩的 APK/JAR 文件中的文件：`"jar:file://" + Application.dataPath + "!/assets"`。
+
+在许多平台上，流媒体资源文件夹位置是只读的；您不能在运行时在这些位置修改或写入新文件。请使用 [Application.persistentDataPath](https://docs.unity.cn/cn/2019.4/ScriptReference/Application-persistentDataPath.html) 来获取可写的文件夹位置。
+
+**注意**：位于 **StreamingAssets** 文件夹中的 .dll 和脚本文件不参与脚本编译。
