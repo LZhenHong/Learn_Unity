@@ -5,6 +5,9 @@ using System.Collections;
 
 public class LoadFromFileExample : MonoBehaviour
 {
+    public GameObject respawnPrefab;
+    public GameObject respawn;
+
     IEnumerator InstantiateObject()
     {
         string url = "file:///" + Application.dataPath + "/AssetBundles/testassetbundle";
@@ -51,6 +54,12 @@ public class LoadFromFileExample : MonoBehaviour
     {
         // 它所描述的是在构建 AssetBundles 时所生成的清单列表，使用构建函数在指定目录下构建 AssetBundles 时会生成一个总的 Manifest 文件，它的资源文件名与其所在的文件夹名称相同。
         LoadAssetBundleManifest(Path.Combine(Application.dataPath, "AssetBundles/AssetBundles"));
+
+        if (respawn == null)
+        {
+            respawn = GameObject.FindWithTag("Respawn");
+        }
+        Instantiate(respawnPrefab, respawn.transform.position, respawn.transform.rotation);
     }
 
     public void LoadAssetBundleManifest(string path)
