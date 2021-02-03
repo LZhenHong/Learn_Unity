@@ -240,6 +240,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de2103bf56142ad40b639718752bd550, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  respawnPrefab: {fileID: 0}
+  respawn: {fileID: 0}
 --- !u!20 &519420031
 Camera:
   m_ObjectHideFlags: 0
@@ -307,6 +309,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1891548312}
   - component: {fileID: 1891548311}
+  - component: {fileID: 1891548313}
   m_Layer: 0
   m_Name: New Sprite
   m_TagString: Untagged
@@ -378,3 +381,25 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1891548313
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1891548310}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 735f9bb4b4ae3034780a78c88ac209a3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  IsAutoRegister: 1
+  Data: <None>
+  States: []
+  StateNames: []
+  DefaultState: 
+  DefaultStateName: 
+  FinalState: 
+  FinalStateName: 
+  Name: New Finite State Machine
+  Group: Default
